@@ -5,6 +5,15 @@ export { RiskRewardCalculator } from "./RiskRewardCalculator";
 export { BreakEvenCalculator } from "./BreakEvenCalculator";
 export { AtrStopCalculator } from "./AtrStopCalculator";
 
+// Gold-themed calculators
+export {
+  GoldCalculator,
+  PositionSizeCalc,
+  PivotPointsCalc,
+  FibonacciCalc,
+  RiskManagementCalc,
+} from "./GoldCalculators";
+
 // Placeholder calculators
 export { RMultiplesCalculator } from "./RMultiplesCalculator";
 export { CompoundingCalculator } from "./CompoundingCalculator";
