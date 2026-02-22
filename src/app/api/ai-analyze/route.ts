@@ -31,43 +31,51 @@ interface AnalyzeResponse {
 }
 
 /**
- * Real OpenAI Analysis Function
+ * Professional Trading Analysis using OpenAI GPT-4
  */
-async function realAnalyze(request: AnalyzeRequest): Promise<AnalyzeResponse> {
+async function analyzeMarket(request: AnalyzeRequest): Promise<AnalyzeResponse> {
   const { market, symbol, timeframe, levels, userPrompt } = request;
 
-  const systemPrompt = `أنت محلل أسواق مالي محترف. قم بتحليل البيانات المقدمة وأعطِ رداً منظم بالشكل التالي:
+  const systemPrompt = `أنت محلل أسواق مالي محترف مع خبرة 15+ سنة في التحليل الفني والأساسي. 
 
-يجب أن يكون الرد بتنسيق JSON صالح فقط (بدون أي نص إضافي):
+مهمتك: تحليل الأداة المالية المطلوبة وإعطاء تحليل مهني دقيق.
 
+قواعد التحليل:
+1. استخدم التحليل الفني (Fibonacci, Support/Resistance, Trend Lines)
+2. حدد الاتجاه العام مع درجة الثقة
+3. أعط مستويات دقة ومقاومة محددة
+4. قدم سيناريوهات تداول واضحة مع نقاط الدخول والخروج
+5. حدد نسبة المخاطرة للعائد (Risk/Reward)
+6. أضف تحذيرات إدارة المخاطر
+
+**مهم جداً**: الرد يجب أن يكون JSON صالح فقط بدون أي نص إضافي!
+
+صيغة الرد المطلوبة:
 {
   "bias": "bullish" أو "bearish" أو "neutral",
   "keyLevels": [
-    {"type": "اسم المستوى", "price": "السعر", "note": "ملاحظة قصيرة"}
+    {"type": "اسم المستوى بالعربية والإنجليزية", "price": "السعر رقم فقط", "note": "ملاحظة قصيرة"}
   ],
   "scenarios": [
-    {"condition": "الشرط", "action": "الإجراء", "target": "الهدف"}
+    {"condition": "الشرط بالتفصيل", "action": "الإجراء المحدد", "target": "الهدف السعر"}
   ],
-  "riskNote": "ملاحظة إدارة المخاطر",
-  "rawText": "التحليل الكامل بالعربية أو الإنجليزية"
-}
+  "riskNote": "ملاحظة شاملة لإدارة المخاطر",
+  "rawText": "تحليل مفصل بالعربية يتضمن:\\n- نظرة عامة على السوق\\n- التحليل الفني\\n- المستويات الرئيسية\\n- التوصيات\\n- التحذيرات"
+}`;
 
-قواعد التحليل:
-1. حدد اتجاه السوق (bullish/bearish/neutral)
-2. حدد 3-4 مستويات رئيسية (دعم/مقاومة/فيبوناتشي)
-3. قدم 2-3 سيناريوهات تداول IF-THEN
-4. أضف ملاحظة إدارة مخاطر واضحة
-5. التحليل يجب أن يكون مهني ومفصل`;
+  const userMessage = `📊 طلب تحليل سوق:
 
-  const userMessage = `تحليل السوق:
-- السوق: ${market}
-- الرمز: ${symbol}
-- الإطار الزمني: ${timeframe}
-${levels?.high ? `- أعلى سعر: ${levels.high}` : ""}
-${levels?.low ? `- أدنى سعر: ${levels.low}` : ""}
-${levels?.close ? `- السعر الحالي: ${levels.close}` : ""}
+🔹 السوق: ${market}
+🔹 الرمز: ${symbol}
+🔹 الإطار الزمني: ${timeframe}
+${levels?.high ? `🔹 أعلى سعر: ${levels.high}` : ""}
+${levels?.low ? `🔹 أدنى سعر: ${levels.low}` : ""}
+${levels?.close ? `🔹 السعر الحالي: ${levels.close}` : ""}
 
-سؤال المتداول: ${userPrompt}`;
+📝 سؤال المتداول:
+${userPrompt}
+
+أعطني تحليل مهني مفصل مع مستويات دقيقة وسيناريوهات تداول واضحة.`;
 
   try {
     const response = await fetch("https://api.openai.com/v1/chat/completions", {
@@ -77,38 +85,40 @@ ${levels?.close ? `- السعر الحالي: ${levels.close}` : ""}
         Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
       },
       body: JSON.stringify({
-        model: "gpt-4o-mini",
+        model: "gpt-4o",
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: userMessage },
         ],
-        temperature: 0.7,
-        max_tokens: 2000,
+        temperature: 0.3,
+        max_tokens: 3000,
         response_format: { type: "json_object" },
       }),
     });
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
-      console.error("OpenAI API Error:", errorData);
-      throw new Error(`OpenAI API error: ${response.status}`);
+      console.error("OpenAI API Error:", JSON.stringify(errorData, null, 2));
+      throw new Error(`OpenAI API error: ${response.status} - ${JSON.stringify(errorData)}`);
     }
 
     const data = await response.json();
     const content = data.choices[0]?.message?.content;
 
     if (!content) {
-      throw new Error("No response from OpenAI");
+      throw new Error("No response content from OpenAI");
     }
+
+    console.log("OpenAI Response:", content.substring(0, 200) + "...");
 
     const result = JSON.parse(content);
 
-    // Ensure all required fields exist
+    // Validate and ensure all required fields exist
     return {
-      bias: result.bias || "neutral",
-      keyLevels: result.keyLevels || [],
-      scenarios: result.scenarios || [],
-      riskNote: result.riskNote || "استخدم إدارة مخاطر مناسبة ولا تخاطر بأكثر من 1-2% من رأس المال.",
+      bias: ["bullish", "bearish", "neutral"].includes(result.bias) ? result.bias : "neutral",
+      keyLevels: Array.isArray(result.keyLevels) ? result.keyLevels.slice(0, 6) : [],
+      scenarios: Array.isArray(result.scenarios) ? result.scenarios.slice(0, 4) : [],
+      riskNote: result.riskNote || "استخدم إدارة مخاطر مناسبة (1-2% كحد أقصى من رأس المال لكل صفقة). ضع وقف الخسارة دائماً.",
       rawText: result.rawText || "تم التحليل بنجاح.",
     };
   } catch (error) {
@@ -118,99 +128,102 @@ ${levels?.close ? `- السعر الحالي: ${levels.close}` : ""}
 }
 
 /**
- * Fallback Mock Analysis (used when API fails)
+ * Fallback Analysis (when API is unavailable)
  */
-async function mockAnalyze(request: AnalyzeRequest): Promise<AnalyzeResponse> {
+async function fallbackAnalysis(request: AnalyzeRequest): Promise<AnalyzeResponse> {
   const { market, symbol, timeframe, levels, userPrompt } = request;
 
-  await new Promise((resolve) => setTimeout(resolve, 1000));
-
+  // Analyze prompt for sentiment
   const promptLower = userPrompt.toLowerCase();
   let bias: "bullish" | "bearish" | "neutral" = "neutral";
+  
+  const bullishKeywords = ["شراء", "buy", "bullish", "long", "صعود", "ارتداد", "support", "دعم", "اختراق", "breakout"];
+  const bearishKeywords = ["بيع", "sell", "bearish", "short", "هبوط", "تصحيح", "resistance", "مقاومة", "كسر", "breakdown"];
+  
+  const bullishScore = bullishKeywords.filter(k => promptLower.includes(k)).length;
+  const bearishScore = bearishKeywords.filter(k => promptLower.includes(k)).length;
+  
+  if (bullishScore > bearishScore) bias = "bullish";
+  else if (bearishScore > bullishScore) bias = "bearish";
 
-  if (
-    promptLower.includes("شراء") ||
-    promptLower.includes("buy") ||
-    promptLower.includes("bullish") ||
-    promptLower.includes("long") ||
-    promptLower.includes("صعود")
-  ) {
-    bias = "bullish";
-  } else if (
-    promptLower.includes("بيع") ||
-    promptLower.includes("sell") ||
-    promptLower.includes("bearish") ||
-    promptLower.includes("short") ||
-    promptLower.includes("هبوط")
-  ) {
-    bias = "bearish";
-  }
+  // Generate levels based on provided prices or defaults
+  const basePrice = levels?.close ? parseFloat(levels.close) : 
+                    market === "crypto" ? 45000 : 
+                    market === "forex" ? 1.0850 : 100;
+  
+  const highPrice = levels?.high ? parseFloat(levels.high) : basePrice * 1.02;
+  const lowPrice = levels?.low ? parseFloat(levels.low) : basePrice * 0.98;
 
-  const basePrice = levels?.close ? parseFloat(levels.close) : 1.08500;
-  const highPrice = levels?.high ? parseFloat(levels.high) : basePrice * 1.01;
-  const lowPrice = levels?.low ? parseFloat(levels.low) : basePrice * 0.99;
+  const decimals = market === "forex" ? 5 : market === "crypto" ? 2 : 2;
 
   const keyLevels = [
     {
-      type: "مقاومة 1 / Resistance 1",
-      price: highPrice.toFixed(5),
-      note: "أعلى سوينج - مستوى اختراق مهم",
+      type: "مقاومة رئيسية / Major Resistance",
+      price: highPrice.toFixed(decimals),
+      note: `أعلى مستوى - اختراقه يعني استمرار الصعود`,
+    },
+    {
+      type: "مستوى فيبوناتشي 61.8%",
+      price: (lowPrice + (highPrice - lowPrice) * 0.618).toFixed(decimals),
+      note: "المستوى الذهبي - منطقة انعكاس قوية",
     },
     {
       type: "نقطة المحور / Pivot",
-      price: basePrice.toFixed(5),
-      note: "السعر الحالي - نقطة قرار",
+      price: basePrice.toFixed(decimals),
+      note: "السعر الحالي - نقطة اتخاذ القرار",
     },
     {
-      type: "دعم 1 / Support 1",
-      price: lowPrice.toFixed(5),
-      note: "أدنى سوينج - منطقة طلب",
-    },
-    {
-      type: "فيبوناتشي 61.8%",
-      price: (lowPrice + (highPrice - lowPrice) * 0.618).toFixed(5),
-      note: "مستوى فيبوناتشي الذهبي",
+      type: "دعم رئيسي / Major Support",
+      price: lowPrice.toFixed(decimals),
+      note: "أدنى مستوى - كسره يعني استمرار الهبوط",
     },
   ];
 
   const scenarios = [
     {
-      condition: `اختراق السعر فوق ${highPrice.toFixed(5)}`,
-      action: bias === "bullish" ? "ابحث عن دخول شراء عند إعادة الاختبار" : "انتظر التأكيد",
-      target: (highPrice * 1.015).toFixed(5),
+      condition: `اختراق السعر لمستوى ${highPrice.toFixed(decimals)} مع إغلاق واضح`,
+      action: bias === "bullish" ? "دخول شراء مع وقف خسارة تحت المستوى المكسور" : "انتظار تأكيد الاختراق وإعادة الاختبار",
+      target: (highPrice * 1.03).toFixed(decimals),
     },
     {
-      condition: `ثبات السعر فوق ${lowPrice.toFixed(5)}`,
-      action: "ابحث عن نماذج انعكاس صاعدة",
-      target: basePrice.toFixed(5),
+      condition: `ارتداد السعر من ${highPrice.toFixed(decimals)} مع نماذج انعكاس`,
+      action: "البحث عن فرصة بيع مع وقف خسارة فوق القمة",
+      target: lowPrice.toFixed(decimals),
     },
     {
-      condition: `كسر السعر تحت ${lowPrice.toFixed(5)}`,
-      action: bias === "bearish" ? "ابحث عن دخول بيع" : "اخرج من صفقات الشراء",
-      target: (lowPrice * 0.985).toFixed(5),
+      condition: `ثبات السعر فوق ${lowPrice.toFixed(decimals)} مع إشارات شراء`,
+      action: bias !== "bearish" ? "دخول شراء مع وقف خسارة تحت الدعم" : "انتظار تأكيد أكثر",
+      target: basePrice.toFixed(decimals),
     },
   ];
 
-  const riskNote = `التقلب الحالي على ${symbol} يشير إلى استخدام وقف خسارة ${timeframe === "D1" ? "أوسع" : "قياسي"}. خاطر بـ 1-2% كحد أقصى من رأس المال. ظروف السوق قد تتغير بسرعة.`;
+  const riskNote = `⚠️ إدارة المخاطر:
+- لا تخاطر بأكثر من 1-2% من رأس المال في صفقة واحدة
+- استخدم وقف الخسارة دائماً
+- نسبة المخاطرة للعائد الموصى بها: 1:2 على الأقل
+- الإطار الزمني ${timeframe} يتطلب وقف خسارة ${timeframe === "D1" ? "50-100 نقطة" : timeframe === "H4" ? "30-50 نقطة" : "15-30 نقطة"}`;
 
-  const rawText = `📊 تحليل AI لـ ${symbol} (${market.toUpperCase()})
-
-🎯 اتجاه السوق: ${bias === "bullish" ? "صاعد BULLISH" : bias === "bearish" ? "هبوطي BEARISH" : "محايد NEUTRAL"}
+  const rawText = `📊 تحليل ${symbol} - ${market.toUpperCase()}
 ⏰ الإطار الزمني: ${timeframe}
 
+🎯 نظرة عامة:
+الاتجاه الحالي: ${bias === "bullish" ? "صاعد 📈" : bias === "bearish" ? "هبوطي 📉" : "محايد ➡️"}
+السعر الحالي: ${basePrice.toFixed(decimals)}
+
 📍 المستويات الرئيسية:
-${keyLevels.map((l) => `  • ${l.type}: ${l.price} - ${l.note}`).join("\n")}
+${keyLevels.map(l => `• ${l.type}: ${l.price} - ${l.note}`).join("\n")}
 
 📈 سيناريوهات التداول:
-${scenarios.map((s, i) => `  ${i + 1}. IF ${s.condition}\n     THEN ${s.action}\n     الهدف: ${s.target}`).join("\n\n")}
+${scenarios.map((s, i) => `
+${i + 1}. ${s.condition}
+   → ${s.action}
+   → الهدف: ${s.target}`).join("\n")}
 
-⚠️ إدارة المخاطر:
 ${riskNote}
 
----
-هذا التحليل لأغراض تعليمية فقط ولا يُعتبر نصيحة مالية. دائماً قم بأبحاثك الخاصة وأدر مخاطرك بشكل مناسب.
+⚠️ تنبيه: هذا التحليل لأغراض تعليمية فقط ولا يُعتبر نصيحة مالية. تداول	workflows ينطوي على مخاطر عالية.
 
-تم إنشاؤه بواسطة Infinity Algo AI Assistant`;
+تم التحليل بواسطة Infinity Algo AI 🤖`;
 
   return {
     bias,
@@ -225,32 +238,38 @@ export async function POST(request: NextRequest) {
   try {
     const body: AnalyzeRequest = await request.json();
 
+    // Validate required fields
     if (!body.symbol || !body.userPrompt) {
       return NextResponse.json(
-        { error: "Symbol and user prompt are required" },
+        { error: "يرجى إدخال الرمز والسؤال" },
         { status: 400 }
       );
     }
 
-    // Try real analysis first, fall back to mock if API fails
+    console.log("Analysis Request:", { symbol: body.symbol, market: body.market, hasApiKey: !!process.env.OPENAI_API_KEY });
+
     let result: AnalyzeResponse;
 
+    // Use real OpenAI if API key exists
     if (process.env.OPENAI_API_KEY) {
       try {
-        result = await realAnalyze(body);
+        console.log("Using OpenAI GPT-4o for analysis...");
+        result = await analyzeMarket(body);
+        console.log("OpenAI analysis completed successfully");
       } catch (apiError) {
-        console.warn("OpenAI API failed, using mock analysis:", apiError);
-        result = await mockAnalyze(body);
+        console.error("OpenAI API failed, using fallback:", apiError instanceof Error ? apiError.message : apiError);
+        result = await fallbackAnalysis(body);
       }
     } else {
-      result = await mockAnalyze(body);
+      console.log("No API key, using fallback analysis");
+      result = await fallbackAnalysis(body);
     }
 
     return NextResponse.json(result);
   } catch (error) {
     console.error("AI Analysis Error:", error);
     return NextResponse.json(
-      { error: "Failed to analyze market data" },
+      { error: "حدث خطأ في التحليل. يرجى المحاولة مرة أخرى." },
       { status: 500 }
     );
   }
@@ -261,6 +280,7 @@ export async function GET() {
     status: "ok",
     message: "AI Analysis API is running",
     hasApiKey: !!process.env.OPENAI_API_KEY,
-    version: "2.0.0",
+    model: "gpt-4o",
+    version: "3.0.0",
   });
 }
