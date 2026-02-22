@@ -1,46 +1,37 @@
 import { NextRequest, NextResponse } from "next/server";
+import ZAI from "z-ai-web-dev-sdk";
 
-interface AnalyzeRequest {
+interface ChatRequest {
   message: string;
-  symbol?: string;
-  market?: string;
 }
 
-/**
- * Fetch real-time price from Yahoo Finance
- */
+// Real-time price fetching from Yahoo Finance
 async function fetchPrice(symbol: string): Promise<{
   price: number;
   change: number;
   changePercent: number;
 } | null> {
   try {
-    let yahooSymbol = symbol.toUpperCase().replace("/", "");
+    let yahooSymbol = symbol.toUpperCase().replace("/", "").replace("-", "");
     
-    // Auto-detect symbol type
-    if (symbol.includes("XAU") || symbol.toUpperCase().includes("GOLD")) {
-      yahooSymbol = "GC=F";
-    } else if (symbol.includes("XAG") || symbol.toUpperCase().includes("SILVER")) {
-      yahooSymbol = "SI=F";
-    } else if (symbol.toUpperCase().includes("OIL") || symbol.toUpperCase().includes("WTI")) {
-      yahooSymbol = "CL=F";
-    } else if (["BTC", "ETH", "SOL", "XRP", "BNB"].some(s => symbol.toUpperCase().includes(s))) {
-      yahooSymbol = symbol.toUpperCase().replace("/", "-") + "-USD";
-    } else if (["EUR", "GBP", "USD", "JPY", "AUD", "CAD", "CHF", "NZD"].some(s => symbol.toUpperCase().includes(s))) {
-      yahooSymbol = symbol.toUpperCase().replace("/", "") + "=X";
-    } else if (["NAS", "US30", "US500", "SPX", "DAX", "DJI"].some(s => symbol.toUpperCase().includes(s))) {
-      const indexMap: Record<string, string> = {
-        "NAS100": "^NDX", "NASDAQ": "^NDX", "NAS": "^NDX",
-        "US30": "^DJI", "DJI": "^DJI", 
-        "US500": "^GSPC", "SPX500": "^GSPC", "SPX": "^GSPC",
-        "DAX": "^GDAXI",
-      };
-      yahooSymbol = indexMap[symbol.toUpperCase()] || symbol;
-    }
+    const symbolMap: Record<string, string> = {
+      "XAUUSD": "GC=F", "GOLD": "GC=F",
+      "XAGUSD": "SI=F", "SILVER": "SI=F",
+      "OIL": "CL=F", "WTI": "CL=F",
+      "BTC": "BTC-USD", "ETH": "ETH-USD",
+      "SOL": "SOL-USD", "XRP": "XRP-USD",
+      "EURUSD": "EURUSD=X", "EUR/USD": "EURUSD=X",
+      "GBPUSD": "GBPUSD=X", "GBP/USD": "GBPUSD=X",
+      "USDJPY": "USDJPY=X", "USD/JPY": "USDJPY=X",
+      "NAS100": "^NDX", "NASDAQ": "^NDX",
+      "US30": "^DJI", "US500": "^GSPC", "DAX": "^GDAXI",
+    };
+
+    yahooSymbol = symbolMap[symbol.toUpperCase()] || yahooSymbol;
 
     const response = await fetch(
       `https://query1.finance.yahoo.com/v8/finance/chart/${yahooSymbol}?interval=1d&range=5d`,
-      { headers: { 'User-Agent': 'Mozilla/5.0' } }
+      { headers: { 'User-Agent': 'Mozilla/5.0' }, cache: 'no-store' }
     );
 
     if (!response.ok) return null;
@@ -48,28 +39,29 @@ async function fetchPrice(symbol: string): Promise<{
     const data = await response.json();
     const meta = data.chart?.result?.[0]?.meta;
     
-    if (!meta) return null;
+    if (!meta?.regularMarketPrice) return null;
 
+    const price = meta.regularMarketPrice;
+    const previousClose = meta.previousClose || price;
+    
     return {
-      price: meta.regularMarketPrice,
-      change: meta.regularMarketPrice - meta.previousClose,
-      changePercent: ((meta.regularMarketPrice - meta.previousClose) / meta.previousClose) * 100,
+      price,
+      change: price - previousClose,
+      changePercent: ((price - previousClose) / previousClose) * 100,
     };
   } catch {
     return null;
   }
 }
 
-/**
- * Extract symbols from message
- */
+// Extract trading symbols from message
 function extractSymbols(message: string): string[] {
   const patterns = [
     /\b(XAUUSD|XAGUSD|GOLD|SILVER|OIL|WTI)\b/gi,
-    /\b(BTC|ETH|SOL|XRP|BNB|ADA|DOGE|DOT|AVAX|MATIC)\b/gi,
-    /\b(EUR\/USD|GBP\/USD|USD\/JPY|AUD\/USD|USD\/CHF|USD\/CAD|NZD\/USD)\b/gi,
-    /\b(EURUSD|GBPUSD|USDJPY|AUDUSD|USDCHF|USDCAD|NZDUSD)\b/gi,
-    /\b(NAS100|US30|US500|SPX500|DAX|NASDAQ|DJI)\b/gi,
+    /\b(BTC|ETH|SOL|XRP|BNB|ADA|DOGE|DOT|AVAX)\b/gi,
+    /\b(EUR\/USD|GBP\/USD|USD\/JPY|AUD\/USD)\b/gi,
+    /\b(EURUSD|GBPUSD|USDJPY|AUDUSD)\b/gi,
+    /\b(NAS100|US30|US500|DAX|NASDAQ)\b/gi,
     /\b(AAPL|TSLA|GOOGL|MSFT|AMZN|META|NVDA)\b/gi,
   ];
   
@@ -79,66 +71,56 @@ function extractSymbols(message: string): string[] {
     if (matches) symbols.push(...matches);
   });
   
-  return [...new Set(symbols.map(s => s.toUpperCase()))];
+  return [...new Set(symbols.map(s => s.toUpperCase().replace("/", "")))];
 }
 
-/**
- * Chat with GPT-4o
- */
+// Chat with AI using z-ai-web-dev-sdk
 async function chatWithAI(message: string, priceData: Record<string, any>): Promise<string> {
+  const priceInfo = Object.keys(priceData).length > 0 
+    ? `\n\n📊 أسعار حقيقية الآن:\n${Object.entries(priceData)
+        .map(([sym, data]: [string, any]) => 
+          `• ${sym}: ${data.price.toFixed(2)} (${data.changePercent >= 0 ? '+' : ''}${data.changePercent.toFixed(2)}%)`
+        ).join('\n')}`
+    : '';
+
   const systemPrompt = `أنت خبير تداول محترف مع 20 سنة خبرة في الأسواق المالية.
 
-مهمتك: الإجابة على أسئلة المتداولين بشكل واضح ومفصل.
+مهمتك: مساعدة المتداولين بالإجابة على أسئلتهم.
 
 قدراتك:
-- تحليل فني (فيبوناتشي، مستويات، اتجاهات، نماذج)
-- تحليل أساسي (أخبار، أحداث اقتصادية)
-- استراتيجيات تداول
-- إدارة مخاطر
-- تفسير المؤشرات (RSI, MACD, Moving Averages)
+✅ تحليل فني (فيبوناتشي، دعم/مقاومة، اتجاهات)
+✅ استراتيجيات تداول
+✅ إدارة مخاطر
+✅ شرح المؤشرات (RSI, MACD, MA)
 
 قواعد:
-1. أجب باللغة التي سُئلت بها (عربي أو إنجليزي)
-2. كن محدداً مع الأرقام والمستويات
-3. قدم خطوات عملية واضحة
-4. أضف تحذيرات المخاطر عند الحاجة
-5. استخدم الإيموجي لتوضيح النقاط
+1. أجب بنفس لغة السؤال
+2. كن محدد مع الأرقام
+3. استخدم الإيموجي
+${priceInfo}`;
 
-${Object.keys(priceData).length > 0 ? `
-📊 أسعار حقيقية حالية:
-${Object.entries(priceData).map(([sym, data]: [string, any]) => 
-  `- ${sym}: ${data.price} (${data.changePercent >= 0 ? '+' : ''}${data.changePercent.toFixed(2)}%)`
-).join('\n')}
-` : ''}`;
-
-  const response = await fetch("https://api.openai.com/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
-    },
-    body: JSON.stringify({
-      model: "gpt-4o",
+  try {
+    const zai = await ZAI.create();
+    
+    const completion = await zai.chat.completions.create({
       messages: [
         { role: "system", content: systemPrompt },
         { role: "user", content: message },
       ],
       temperature: 0.7,
-      max_tokens: 2000,
-    }),
-  });
+      max_tokens: 1500,
+    });
 
-  if (!response.ok) {
-    throw new Error(`OpenAI error: ${response.status}`);
+    return completion.choices?.[0]?.message?.content || "عذراً، لم أتمكن من الرد.";
+  } catch (error) {
+    console.error("ZAI Error:", error);
+    throw error;
   }
-
-  const data = await response.json();
-  return data.choices[0]?.message?.content || "عذراً، لم أتمكن من الرد.";
 }
 
 export async function POST(request: NextRequest) {
   try {
-    const body: AnalyzeRequest = await request.json();
+    const body: ChatRequest = await request.json();
     const { message } = body;
 
     if (!message?.trim()) {
@@ -148,40 +130,19 @@ export async function POST(request: NextRequest) {
     // Extract symbols and fetch prices
     const symbols = extractSymbols(message);
     const priceData: Record<string, any> = {};
-
+    
     for (const symbol of symbols.slice(0, 3)) {
       const price = await fetchPrice(symbol);
-      if (price) {
-        priceData[symbol] = price;
-      }
+      if (price) priceData[symbol] = price;
     }
 
     // Get AI response
-    let response: string;
-    
-    if (process.env.OPENAI_API_KEY) {
-      response = await chatWithAI(message, priceData);
-    } else {
-      // Fallback without API
-      response = `🤖 **أنا Infinity Algo AI**
+    const response = await chatWithAI(message, priceData);
 
-شكراً لسؤالك! للإجابة الكاملة، يرجى إضافة OpenAI API Key.
-
-**الأسعار الحالية:**
-${Object.entries(priceData).map(([sym, data]: [string, any]) => 
-  `• ${sym}: ${data.price} (${data.changePercent >= 0 ? '+' : ''}${data.changePercent.toFixed(2)}%)`
-).join('\n') || 'لم أجد أسعار لهذا الرمز'}
-
-💡 **نصيحة:** تأكد من كتابة الرمز بشكل صحيح (مثل XAUUSD, BTC, EUR/USD)`;
-    }
-
-    return NextResponse.json({ 
-      response,
-      prices: priceData 
-    });
+    return NextResponse.json({ response, prices: priceData });
 
   } catch (error) {
-    console.error("Error:", error);
+    console.error("Chat Error:", error);
     return NextResponse.json(
       { error: "حدث خطأ، حاول مرة أخرى" },
       { status: 500 }
@@ -192,7 +153,7 @@ ${Object.entries(priceData).map(([sym, data]: [string, any]) =>
 export async function GET() {
   return NextResponse.json({
     status: "ok",
-    message: "Infinity Algo Chat API",
-    hasApiKey: !!process.env.OPENAI_API_KEY,
+    message: "Infinity Algo Chat API - Global Access",
+    provider: "Z-AI SDK",
   });
 }
