@@ -1,0 +1,38 @@
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="infinityGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#3b82f6"/>
+      <stop offset="50%" stop-color="#22c55e"/>
+      <stop offset="100%" stop-color="#3b82f6"/>
+    </linearGradient>
+    <linearGradient id="bgGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#050816"/>
+      <stop offset="100%" stop-color="#0f172a"/>
+    </linearGradient>
+  </defs>
+  
+  <!-- Background -->
+  <rect width="512" height="512" rx="64" fill="url(#bgGradient)"/>
+  
+  <!-- Infinity Symbol -->
+  <g transform="translate(56, 156)">
+    <path 
+      d="M200 100 C200 44.8 155.2 0 100 0 C44.8 0 0 44.8 0 100 C0 155.2 44.8 200 100 200 L300 200 C355.2 200 400 155.2 400 100 C400 44.8 355.2 0 300 0 C244.8 0 200 44.8 200 100 Z"
+      fill="none"
+      stroke="url(#infinityGradient)"
+      stroke-width="24"
+      stroke-linecap="round"
+    />
+  </g>
+  
+  <!-- Text: infinity algo -->
+  <text x="256" y="380" text-anchor="middle" font-family="system-ui, -apple-system, sans-serif" font-size="48" font-weight="700" fill="#e5e7eb">
+    <tspan fill="url(#infinityGradient)">infinity</tspan>
+    <tspan fill="#e5e7eb"> algo</tspan>
+  </text>
+  
+  <!-- Text: by Jeremy -->
+  <text x="256" y="420" text-anchor="middle" font-family="system-ui, -apple-system, sans-serif" font-size="24" font-weight="300" fill="#9ca3af">
+    by Jeremy
+  </text>
+</svg>
