@@ -29,10 +29,14 @@ import {
   Check,
   Sparkles,
   Lightbulb,
+  DollarSign,
+  Activity,
 } from "lucide-react";
 
 interface AnalysisResult {
   bias: "bullish" | "bearish" | "neutral";
+  currentPrice?: string;
+  priceChange?: string;
   keyLevels: Array<{ type: string; price: string; note: string }>;
   scenarios: Array<{ condition: string; action: string; target: string }>;
   riskNote: string;
@@ -40,18 +44,16 @@ interface AnalysisResult {
 }
 
 const examplePrompts = [
-  { ar: "حلل لي الذهب على فريم الساعة مع التركيز على فيبوناتشي ومناطق الانعكاس", en: "Analyze Gold on 1H timeframe with Fibonacci and reversal zones" },
-  { ar: "أعطني مستويات الدعم والمقاومة لليورو دولار مع سيناريوهات التداول", en: "Give me support/resistance levels for EUR/USD with trade scenarios" },
-  { ar: "ما هو اتجاه البيتكوين على اليومي؟ وأين أفضل مناطق الشراء؟", en: "What is BTC trend on daily? Where are best buy zones?" },
+  { ar: "حلل لي الذهب على فريم الساعة مع التركيز على فيبوناتشي ومناطق الانعكاس", market: "commodities", symbol: "XAUUSD" },
+  { ar: "أعطني مستويات الدعم والمقاومة لليورو دولار مع سيناريوهات التداول", market: "forex", symbol: "EUR/USD" },
+  { ar: "ما هو اتجاه البيتكوين على اليومي؟ وأين أفضل مناطق الشراء؟", market: "crypto", symbol: "BTC" },
+  { ar: "حلل مؤشر ناسداك مع نقاط الدخول والخروج", market: "indices", symbol: "NAS100" },
 ];
 
 export default function AIAnalysisPage() {
-  const [market, setMarket] = useState("forex");
-  const [symbol, setSymbol] = useState("");
+  const [market, setMarket] = useState("commodities");
+  const [symbol, setSymbol] = useState("XAUUSD");
   const [timeframe, setTimeframe] = useState("H1");
-  const [highPrice, setHighPrice] = useState("");
-  const [lowPrice, setLowPrice] = useState("");
-  const [closePrice, setClosePrice] = useState("");
   const [userPrompt, setUserPrompt] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [result, setResult] = useState<AnalysisResult | null>(null);
@@ -78,11 +80,6 @@ export default function AIAnalysisPage() {
           market,
           symbol,
           timeframe,
-          levels: {
-            high: highPrice || null,
-            low: lowPrice || null,
-            close: closePrice || null,
-          },
           userPrompt,
         }),
       });
@@ -159,15 +156,19 @@ export default function AIAnalysisPage() {
               <span className="gradient-text">AI Market Analysis</span>
             </h1>
             <p className="text-muted-foreground max-w-xl mx-auto text-lg">
-              تحليل السوق بالذكاء الاصطناعي - بالعربية والإنجليزية
+              تحليل السوق بالذكاء الاصطناعي مع أسعار حقيقية
             </p>
             <div className="flex justify-center gap-2 mt-3">
               <Badge className="bg-green-500/20 text-green-400 border-green-500/30">
                 <Sparkles className="h-3 w-3 mr-1" />
-                GPT-4o Powered
+                GPT-4o
               </Badge>
               <Badge className="bg-blue-500/20 text-blue-400 border-blue-500/30">
-                Real-time Analysis
+                <Activity className="h-3 w-3 mr-1" />
+                Live Prices
+              </Badge>
+              <Badge className="bg-yellow-500/20 text-yellow-400 border-yellow-500/30">
+                Yahoo Finance
               </Badge>
             </div>
           </div>
@@ -184,7 +185,7 @@ export default function AIAnalysisPage() {
               <CardContent className="space-y-4">
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label className="text-muted-foreground">السوق / Market</Label>
+                    <Label className="text-muted-foreground">السوق</Label>
                     <Select value={market} onValueChange={setMarket}>
                       <SelectTrigger className="bg-muted/50 border-primary/20">
                         <SelectValue />
@@ -200,7 +201,7 @@ export default function AIAnalysisPage() {
                   </div>
 
                   <div className="space-y-2">
-                    <Label className="text-muted-foreground">الرمز / Symbol</Label>
+                    <Label className="text-muted-foreground">الرمز</Label>
                     <Input
                       placeholder="XAUUSD, EUR/USD, BTC"
                       value={symbol}
@@ -211,7 +212,7 @@ export default function AIAnalysisPage() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label className="text-muted-foreground">الإطار الزمني / Timeframe</Label>
+                  <Label className="text-muted-foreground">الإطار الزمني</Label>
                   <Select value={timeframe} onValueChange={setTimeframe}>
                     <SelectTrigger className="bg-muted/50 border-primary/20">
                       <SelectValue />
@@ -227,48 +228,11 @@ export default function AIAnalysisPage() {
                   </Select>
                 </div>
 
-                {/* Optional Price Levels */}
-                <details className="group">
-                  <summary className="cursor-pointer text-sm text-muted-foreground hover:text-foreground flex items-center gap-2">
-                    <span className="group-open:rotate-90 transition-transform">▶</span>
-                    إضافة أسعار (اختياري)
-                  </summary>
-                  <div className="grid grid-cols-3 gap-3 mt-3">
-                    <div className="space-y-2">
-                      <Label className="text-muted-foreground text-xs">أعلى سعر</Label>
-                      <Input
-                        placeholder="High"
-                        value={highPrice}
-                        onChange={(e) => setHighPrice(e.target.value)}
-                        className="bg-muted/50 border-primary/20"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label className="text-muted-foreground text-xs">أدنى سعر</Label>
-                      <Input
-                        placeholder="Low"
-                        value={lowPrice}
-                        onChange={(e) => setLowPrice(e.target.value)}
-                        className="bg-muted/50 border-primary/20"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label className="text-muted-foreground text-xs">السعر الحالي</Label>
-                      <Input
-                        placeholder="Close"
-                        value={closePrice}
-                        onChange={(e) => setClosePrice(e.target.value)}
-                        className="bg-muted/50 border-primary/20"
-                      />
-                    </div>
-                  </div>
-                </details>
-
                 {/* Prompt Input */}
                 <div className="space-y-2">
-                  <Label className="text-muted-foreground">سؤالك / Your Question</Label>
+                  <Label className="text-muted-foreground">سؤالك</Label>
                   <Textarea
-                    placeholder="مثال: حلل لي الذهب على فريم الساعة مع التركيز على فيبوناتشي..."
+                    placeholder="مثال: حلل لي الذهب على فريم الساعة..."
                     value={userPrompt}
                     onChange={(e) => setUserPrompt(e.target.value)}
                     className="bg-muted/50 border-primary/20 min-h-[100px] resize-none"
@@ -279,9 +243,9 @@ export default function AIAnalysisPage() {
                 <div className="space-y-2">
                   <Label className="text-muted-foreground text-xs flex items-center gap-1">
                     <Lightbulb className="h-3 w-3" />
-                    أمثلة / Examples
+                    أمثلة سريعة
                   </Label>
-                  <div className="flex flex-wrap gap-2">
+                  <div className="grid grid-cols-2 gap-2">
                     {examplePrompts.map((ex, i) => (
                       <Button
                         key={i}
@@ -289,13 +253,12 @@ export default function AIAnalysisPage() {
                         size="sm"
                         onClick={() => {
                           setUserPrompt(ex.ar);
-                          if (i === 0) { setMarket("commodities"); setSymbol("XAUUSD"); }
-                          if (i === 1) { setMarket("forex"); setSymbol("EUR/USD"); }
-                          if (i === 2) { setMarket("crypto"); setSymbol("BTC"); }
+                          setMarket(ex.market);
+                          setSymbol(ex.symbol);
                         }}
-                        className="text-xs border-primary/20 hover:border-primary"
+                        className="text-xs border-primary/20 hover:border-primary justify-start"
                       >
-                        {ex.ar.substring(0, 25)}...
+                        {ex.symbol}
                       </Button>
                     ))}
                   </div>
@@ -334,6 +297,31 @@ export default function AIAnalysisPage() {
             <div className="space-y-4">
               {result ? (
                 <>
+                  {/* Current Price */}
+                  {result.currentPrice && (
+                    <Card className="glass-card bg-gradient-to-r from-blue-500/10 to-purple-500/10">
+                      <CardContent className="pt-4">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            <DollarSign className="h-5 w-5 text-primary" />
+                            <div>
+                              <p className="text-xs text-muted-foreground">السعر الحالي / Current Price</p>
+                              <p className="text-2xl font-bold font-mono">{result.currentPrice}</p>
+                            </div>
+                          </div>
+                          <Badge 
+                            className={result.priceChange?.startsWith('+') 
+                              ? "bg-green-500/20 text-green-400" 
+                              : "bg-red-500/20 text-red-400"
+                            }
+                          >
+                            {result.priceChange}
+                          </Badge>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )}
+
                   {/* Bias */}
                   <Card className="glass-card">
                     <CardContent className="pt-6">
@@ -341,11 +329,11 @@ export default function AIAnalysisPage() {
                         <div className="flex items-center gap-3">
                           {getBiasIcon(result.bias)}
                           <div>
-                            <p className="text-xs text-muted-foreground uppercase tracking-wider">اتجاه السوق / Market Bias</p>
-                            <p className="text-2xl font-bold">{getBiasLabel(result.bias)}</p>
+                            <p className="text-xs text-muted-foreground">اتجاه السوق</p>
+                            <p className="text-xl font-bold">{getBiasLabel(result.bias)}</p>
                           </div>
                         </div>
-                        <Badge className={`px-4 py-2 text-sm ${getBiasColor(result.bias)}`}>
+                        <Badge className={`px-4 py-2 ${getBiasColor(result.bias)}`}>
                           {result.bias.toUpperCase()}
                         </Badge>
                       </div>
@@ -357,7 +345,7 @@ export default function AIAnalysisPage() {
                     <CardHeader className="pb-2">
                       <CardTitle className="text-base flex items-center gap-2">
                         <Target className="h-4 w-4 text-primary" />
-                        المستويات الرئيسية / Key Levels
+                        المستويات الرئيسية
                       </CardTitle>
                     </CardHeader>
                     <CardContent>
@@ -374,36 +362,38 @@ export default function AIAnalysisPage() {
                   </Card>
 
                   {/* Scenarios */}
-                  <Card className="glass-card">
-                    <CardHeader className="pb-2">
-                      <CardTitle className="text-base">سيناريوهات التداول / Scenarios</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="space-y-3">
-                        {result.scenarios.map((scenario, index) => (
-                          <div key={index} className="bg-muted/30 rounded-lg p-3">
-                            <div className="flex items-start gap-2">
-                              <Badge variant="outline" className="border-blue-500/30 text-blue-400 shrink-0 text-xs">
-                                IF
-                              </Badge>
-                              <p className="text-sm flex-1">{scenario.condition}</p>
+                  {result.scenarios.length > 0 && (
+                    <Card className="glass-card">
+                      <CardHeader className="pb-2">
+                        <CardTitle className="text-base">سيناريوهات التداول</CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="space-y-3">
+                          {result.scenarios.map((scenario, index) => (
+                            <div key={index} className="bg-muted/30 rounded-lg p-3">
+                              <div className="flex items-start gap-2">
+                                <Badge variant="outline" className="border-blue-500/30 text-blue-400 shrink-0 text-xs">
+                                  IF
+                                </Badge>
+                                <p className="text-sm flex-1">{scenario.condition}</p>
+                              </div>
+                              <div className="flex items-start gap-2 mt-2">
+                                <Badge variant="outline" className="border-green-500/30 text-green-400 shrink-0 text-xs">
+                                  THEN
+                                </Badge>
+                                <p className="text-sm flex-1">{scenario.action}</p>
+                              </div>
+                              {scenario.target && (
+                                <p className="text-xs text-muted-foreground mt-2 ml-10">
+                                  🎯 الهدف: {scenario.target}
+                                </p>
+                              )}
                             </div>
-                            <div className="flex items-start gap-2 mt-2">
-                              <Badge variant="outline" className="border-green-500/30 text-green-400 shrink-0 text-xs">
-                                THEN
-                              </Badge>
-                              <p className="text-sm flex-1">{scenario.action}</p>
-                            </div>
-                            {scenario.target && (
-                              <p className="text-xs text-muted-foreground mt-2 ml-10">
-                                🎯 الهدف: {scenario.target}
-                              </p>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    </CardContent>
-                  </Card>
+                          ))}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )}
 
                   {/* Risk Note */}
                   <Card className="glass-card border-yellow-500/30">
@@ -420,7 +410,9 @@ export default function AIAnalysisPage() {
                   <CardContent className="text-center">
                     <BrainCircuit className="h-16 w-16 text-muted-foreground/30 mx-auto mb-4" />
                     <p className="text-muted-foreground">أدخل بيانات السوق واضغط تحليل</p>
-                    <p className="text-xs text-muted-foreground/60 mt-1">Enter market data and click analyze</p>
+                    <p className="text-xs text-muted-foreground/60 mt-2">
+                      ⚡ أسعار حقيقية من Yahoo Finance
+                    </p>
                   </CardContent>
                 </Card>
               )}
@@ -432,7 +424,7 @@ export default function AIAnalysisPage() {
             <Card className="glass-card mt-6">
               <CardHeader>
                 <div className="flex items-center justify-between">
-                  <CardTitle className="text-lg">📝 التحليل الكامل / Full Analysis</CardTitle>
+                  <CardTitle className="text-lg">📝 التحليل الكامل</CardTitle>
                   <Button variant="ghost" size="sm" onClick={copyToClipboard}>
                     {copied ? (
                       <Check className="h-4 w-4 text-green-500" />
@@ -454,10 +446,9 @@ export default function AIAnalysisPage() {
           <div className="mt-8 flex items-start gap-3 bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-4">
             <AlertTriangle className="h-5 w-5 text-yellow-500 shrink-0 mt-0.5" />
             <div>
-              <p className="text-sm font-medium text-yellow-200">تنبيه مهم / Important Disclaimer</p>
+              <p className="text-sm font-medium text-yellow-200">تنبيه مهم</p>
               <p className="text-xs text-muted-foreground mt-1">
-                هذا التحليل لأغراض تعليمية فقط ولا يُعتبر نصيحة مالية. التداول ينطوي على مخاطر عالية. 
-                This is NOT financial advice. Trading involves significant risk.
+                الأسعار حقيقية من Yahoo Finance. التحليل لأغراض تعليمية فقط ولا يُعتبر نصيحة مالية.
               </p>
             </div>
           </div>
@@ -466,7 +457,7 @@ export default function AIAnalysisPage() {
           <div className="mt-8 text-center">
             <Logo size="sm" className="inline-flex" />
             <p className="text-xs text-muted-foreground mt-2">
-              Powered by GPT-4o & Infinity Algo Academy
+              Powered by GPT-4o + Yahoo Finance Real-Time Data
             </p>
           </div>
         </div>
