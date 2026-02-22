@@ -31,23 +31,100 @@ interface AnalyzeResponse {
 }
 
 /**
- * Mock AI Analysis Function
- * 
- * This function simulates AI analysis. In production, replace this with
- * a real LLM API call (e.g., OpenAI, Anthropic, or the z-ai-web-dev-sdk).
- * 
- * To connect a real LLM:
- * 1. Install the SDK: `npm install z-ai-web-dev-sdk`
- * 2. Set LLM_API_KEY in your environment variables
- * 3. Replace the mock implementation below with actual API calls
+ * Real OpenAI Analysis Function
+ */
+async function realAnalyze(request: AnalyzeRequest): Promise<AnalyzeResponse> {
+  const { market, symbol, timeframe, levels, userPrompt } = request;
+
+  const systemPrompt = `أنت محلل أسواق مالي محترف. قم بتحليل البيانات المقدمة وأعطِ رداً منظم بالشكل التالي:
+
+يجب أن يكون الرد بتنسيق JSON صالح فقط (بدون أي نص إضافي):
+
+{
+  "bias": "bullish" أو "bearish" أو "neutral",
+  "keyLevels": [
+    {"type": "اسم المستوى", "price": "السعر", "note": "ملاحظة قصيرة"}
+  ],
+  "scenarios": [
+    {"condition": "الشرط", "action": "الإجراء", "target": "الهدف"}
+  ],
+  "riskNote": "ملاحظة إدارة المخاطر",
+  "rawText": "التحليل الكامل بالعربية أو الإنجليزية"
+}
+
+قواعد التحليل:
+1. حدد اتجاه السوق (bullish/bearish/neutral)
+2. حدد 3-4 مستويات رئيسية (دعم/مقاومة/فيبوناتشي)
+3. قدم 2-3 سيناريوهات تداول IF-THEN
+4. أضف ملاحظة إدارة مخاطر واضحة
+5. التحليل يجب أن يكون مهني ومفصل`;
+
+  const userMessage = `تحليل السوق:
+- السوق: ${market}
+- الرمز: ${symbol}
+- الإطار الزمني: ${timeframe}
+${levels?.high ? `- أعلى سعر: ${levels.high}` : ""}
+${levels?.low ? `- أدنى سعر: ${levels.low}` : ""}
+${levels?.close ? `- السعر الحالي: ${levels.close}` : ""}
+
+سؤال المتداول: ${userPrompt}`;
+
+  try {
+    const response = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+      },
+      body: JSON.stringify({
+        model: "gpt-4o-mini",
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userMessage },
+        ],
+        temperature: 0.7,
+        max_tokens: 2000,
+        response_format: { type: "json_object" },
+      }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      console.error("OpenAI API Error:", errorData);
+      throw new Error(`OpenAI API error: ${response.status}`);
+    }
+
+    const data = await response.json();
+    const content = data.choices[0]?.message?.content;
+
+    if (!content) {
+      throw new Error("No response from OpenAI");
+    }
+
+    const result = JSON.parse(content);
+
+    // Ensure all required fields exist
+    return {
+      bias: result.bias || "neutral",
+      keyLevels: result.keyLevels || [],
+      scenarios: result.scenarios || [],
+      riskNote: result.riskNote || "استخدم إدارة مخاطر مناسبة ولا تخاطر بأكثر من 1-2% من رأس المال.",
+      rawText: result.rawText || "تم التحليل بنجاح.",
+    };
+  } catch (error) {
+    console.error("Analysis Error:", error);
+    throw error;
+  }
+}
+
+/**
+ * Fallback Mock Analysis (used when API fails)
  */
 async function mockAnalyze(request: AnalyzeRequest): Promise<AnalyzeResponse> {
   const { market, symbol, timeframe, levels, userPrompt } = request;
 
-  // Simulate API delay
-  await new Promise((resolve) => setTimeout(resolve, 1500));
+  await new Promise((resolve) => setTimeout(resolve, 1000));
 
-  // Determine bias based on prompt analysis (simplified logic)
   const promptLower = userPrompt.toLowerCase();
   let bias: "bullish" | "bearish" | "neutral" = "neutral";
 
@@ -69,75 +146,71 @@ async function mockAnalyze(request: AnalyzeRequest): Promise<AnalyzeResponse> {
     bias = "bearish";
   }
 
-  // Generate mock key levels
   const basePrice = levels?.close ? parseFloat(levels.close) : 1.08500;
   const highPrice = levels?.high ? parseFloat(levels.high) : basePrice * 1.01;
   const lowPrice = levels?.low ? parseFloat(levels.low) : basePrice * 0.99;
 
   const keyLevels = [
     {
-      type: "Resistance 1",
+      type: "مقاومة 1 / Resistance 1",
       price: highPrice.toFixed(5),
-      note: "Previous swing high - key breakout level",
+      note: "أعلى سوينج - مستوى اختراق مهم",
     },
     {
-      type: "Pivot Point",
+      type: "نقطة المحور / Pivot",
       price: basePrice.toFixed(5),
-      note: "Current price zone - decision point",
+      note: "السعر الحالي - نقطة قرار",
     },
     {
-      type: "Support 1",
+      type: "دعم 1 / Support 1",
       price: lowPrice.toFixed(5),
-      note: "Previous swing low - demand zone",
+      note: "أدنى سوينج - منطقة طلب",
     },
     {
-      type: "Fib 61.8%",
+      type: "فيبوناتشي 61.8%",
       price: (lowPrice + (highPrice - lowPrice) * 0.618).toFixed(5),
-      note: "Golden retracement level",
+      note: "مستوى فيبوناتشي الذهبي",
     },
   ];
 
-  // Generate scenarios
   const scenarios = [
     {
-      condition: `Price breaks above ${highPrice.toFixed(5)}`,
-      action: bias === "bullish" ? "Consider long entry on retest" : "Wait for confirmation",
+      condition: `اختراق السعر فوق ${highPrice.toFixed(5)}`,
+      action: bias === "bullish" ? "ابحث عن دخول شراء عند إعادة الاختبار" : "انتظر التأكيد",
       target: (highPrice * 1.015).toFixed(5),
     },
     {
-      condition: `Price holds above ${lowPrice.toFixed(5)}`,
-      action: "Look for bullish reversal patterns",
+      condition: `ثبات السعر فوق ${lowPrice.toFixed(5)}`,
+      action: "ابحث عن نماذج انعكاس صاعدة",
       target: basePrice.toFixed(5),
     },
     {
-      condition: `Price breaks below ${lowPrice.toFixed(5)}`,
-      action: bias === "bearish" ? "Consider short entry" : "Exit long positions",
+      condition: `كسر السعر تحت ${lowPrice.toFixed(5)}`,
+      action: bias === "bearish" ? "ابحث عن دخول بيع" : "اخرج من صفقات الشراء",
       target: (lowPrice * 0.985).toFixed(5),
     },
   ];
 
-  // Generate risk note
-  const riskNote = `Current volatility on ${symbol} suggests using a ${timeframe === "D1" ? "wider" : "standard"} stop loss. Consider risk of 1-2% per trade. Market conditions may change rapidly. Always use proper position sizing.`;
+  const riskNote = `التقلب الحالي على ${symbol} يشير إلى استخدام وقف خسارة ${timeframe === "D1" ? "أوسع" : "قياسي"}. خاطر بـ 1-2% كحد أقصى من رأس المال. ظروف السوق قد تتغير بسرعة.`;
 
-  // Generate raw text analysis
-  const rawText = `📊 AI Analysis for ${symbol} (${market.toUpperCase()})
+  const rawText = `📊 تحليل AI لـ ${symbol} (${market.toUpperCase()})
 
-🎯 Market Bias: ${bias.toUpperCase()}
-⏰ Timeframe: ${timeframe}
+🎯 اتجاه السوق: ${bias === "bullish" ? "صاعد BULLISH" : bias === "bearish" ? "هبوطي BEARISH" : "محايد NEUTRAL"}
+⏰ الإطار الزمني: ${timeframe}
 
-📍 Key Levels Identified:
+📍 المستويات الرئيسية:
 ${keyLevels.map((l) => `  • ${l.type}: ${l.price} - ${l.note}`).join("\n")}
 
-📈 Trade Scenarios:
-${scenarios.map((s, i) => `  ${i + 1}. IF ${s.condition}\n     THEN ${s.action}\n     Target: ${s.target}`).join("\n\n")}
+📈 سيناريوهات التداول:
+${scenarios.map((s, i) => `  ${i + 1}. IF ${s.condition}\n     THEN ${s.action}\n     الهدف: ${s.target}`).join("\n\n")}
 
-⚠️ Risk Management:
+⚠️ إدارة المخاطر:
 ${riskNote}
 
 ---
-This analysis is for educational purposes only and should not be considered as financial advice. Always do your own research and manage your risk appropriately.
+هذا التحليل لأغراض تعليمية فقط ولا يُعتبر نصيحة مالية. دائماً قم بأبحاثك الخاصة وأدر مخاطرك بشكل مناسب.
 
-Generated by Infinity Algo AI Assistant`;
+تم إنشاؤه بواسطة Infinity Algo AI Assistant`;
 
   return {
     bias,
@@ -148,36 +221,10 @@ Generated by Infinity Algo AI Assistant`;
   };
 }
 
-/**
- * Real LLM Integration (uncomment to use)
- * 
- * async function realAnalyze(request: AnalyzeRequest): Promise<AnalyzeResponse> {
- *   const zai = await ZAI.create();
- *   
- *   const systemPrompt = `You are a professional trading analyst. Analyze the given market data and provide:
- *   1. Market bias (bullish/bearish/neutral)
- *   2. Key support and resistance levels
- *   3. Trade scenarios in IF-THEN format
- *   4. Risk management notes
- *   
- *   Respond in JSON format with: bias, keyLevels[], scenarios[], riskNote, rawText`;
- *   
- *   const completion = await zai.chat.completions.create({
- *     messages: [
- *       { role: "system", content: systemPrompt },
- *       { role: "user", content: JSON.stringify(request) }
- *     ]
- *   });
- *   
- *   return JSON.parse(completion.choices[0].message.content);
- * }
- */
-
 export async function POST(request: NextRequest) {
   try {
     const body: AnalyzeRequest = await request.json();
 
-    // Validate required fields
     if (!body.symbol || !body.userPrompt) {
       return NextResponse.json(
         { error: "Symbol and user prompt are required" },
@@ -185,9 +232,19 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Call the analysis function (mock or real)
-    // Replace mockAnalyze with realAnalyze when using a real LLM
-    const result = await mockAnalyze(body);
+    // Try real analysis first, fall back to mock if API fails
+    let result: AnalyzeResponse;
+
+    if (process.env.OPENAI_API_KEY) {
+      try {
+        result = await realAnalyze(body);
+      } catch (apiError) {
+        console.warn("OpenAI API failed, using mock analysis:", apiError);
+        result = await mockAnalyze(body);
+      }
+    } else {
+      result = await mockAnalyze(body);
+    }
 
     return NextResponse.json(result);
   } catch (error) {
@@ -199,11 +256,11 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// Health check endpoint
 export async function GET() {
   return NextResponse.json({
     status: "ok",
     message: "AI Analysis API is running",
-    version: "1.0.0",
+    hasApiKey: !!process.env.OPENAI_API_KEY,
+    version: "2.0.0",
   });
 }
