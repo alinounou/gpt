@@ -2,7 +2,6 @@
 
 import React, { useState, useRef, useEffect } from "react";
 import { Navbar } from "@/components/Navbar";
-import { Logo } from "@/components/Logo";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
@@ -18,6 +17,7 @@ import {
   BookOpen,
   Shield,
   Trash2,
+  Zap,
 } from "lucide-react";
 
 interface Message {
@@ -28,26 +28,15 @@ interface Message {
 
 const suggestions = [
   { icon: TrendingUp, text: "حلل الذهب XAUUSD وأعطني المستويات", color: "text-yellow-500" },
-  { icon: Calculator, text: "ما هو أفضل حجم صفقة لـ EUR/USD؟", color: "text-blue-500" },
+  { icon: Calculator, text: "كيف أحسب حجم الصفقة؟", color: "text-blue-500" },
   { icon: BookOpen, text: "اشرح لي استراتيجية فيبوناتشي", color: "text-green-500" },
   { icon: Shield, text: "كيف أدير المخاطر في التداول؟", color: "text-purple-500" },
 ];
-
-declare global {
-  interface Window {
-    puter: {
-      ai: {
-        chat: (message: string, options?: { model?: string }) => Promise<string>;
-      };
-    };
-  }
-}
 
 export default function AIChatPage() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [puterReady, setPuterReady] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
@@ -58,21 +47,9 @@ export default function AIChatPage() {
     scrollToBottom();
   }, [messages]);
 
-  // Load Puter.js
-  useEffect(() => {
-    const script = document.createElement("script");
-    script.src = "https://js.puter.com/v2/";
-    script.async = true;
-    script.onload = () => {
-      setPuterReady(true);
-      console.log("Puter.js loaded!");
-    };
-    document.body.appendChild(script);
-  }, []);
-
   const sendMessage = async (text?: string) => {
     const messageText = text || input.trim();
-    if (!messageText || isLoading || !puterReady) return;
+    if (!messageText || isLoading) return;
 
     const userMessage: Message = {
       id: Date.now().toString(),
@@ -85,37 +62,22 @@ export default function AIChatPage() {
     setIsLoading(true);
 
     try {
-      const systemPrompt = `أنت خبير تداول محترف مع 20 سنة خبرة في الأسواق المالية (Forex, Crypto, Stocks, Gold, Oil).
+      const response = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: messageText }),
+      });
 
-مهمتك: مساعدة المتداولين بالإجابة على أسئلتهم بشكل واضح ومفصل.
-
-قدراتك:
-✅ تحليل فني (فيبوناتشي، دعم/مقاومة، اتجاهات، نماذج شموع يابانية)
-✅ استراتيجيات تداول (سكالبينج، سوينج، داي تريدنج)
-✅ إدارة مخاطر وحساب حجم الصفقات
-✅ شرح المؤشرات (RSI, MACD, Moving Averages)
-✅ تحليل العملات والذهب والكريبتو
-
-قواعد الرد:
-1. أجب بنفس لغة السؤال (عربي أو إنجليزي)
-2. كن محدد مع الأرقام والمستويات
-3. قدم خطوات عملية واضحة
-4. استخدم الإيموجي للتنسيق
-5. أضف تحذير المخاطر عند الاقتضاء`;
-
-      const fullMessage = `${systemPrompt}\n\nسؤال المتداول: ${messageText}`;
-
-      const response = await window.puter.ai.chat(fullMessage, { model: "gpt-4o-mini" });
+      const data = await response.json();
 
       const assistantMessage: Message = {
         id: (Date.now() + 1).toString(),
         role: "assistant",
-        content: response || "عذراً، لم أتمكن من الرد.",
+        content: data.response || data.error || "عذراً، حدث خطأ",
       };
 
       setMessages((prev) => [...prev, assistantMessage]);
     } catch (error) {
-      console.error("Error:", error);
       const errorMessage: Message = {
         id: (Date.now() + 1).toString(),
         role: "assistant",
@@ -134,9 +96,7 @@ export default function AIChatPage() {
     }
   };
 
-  const clearChat = () => {
-    setMessages([]);
-  };
+  const clearChat = () => setMessages([]);
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
@@ -147,7 +107,7 @@ export default function AIChatPage() {
         <div className="p-4 border-b border-primary/10">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-full bg-gradient-to-br from-blue-500 via-purple-500 to-green-500 flex items-center justify-center">
+              <div className="h-10 w-10 rounded-full bg-gradient-to-br from-blue-500 via-purple-500 to-green-500 flex items-center justify-center animate-pulse-glow">
                 <BrainCircuit className="h-5 w-5 text-white" />
               </div>
               <div>
@@ -156,9 +116,9 @@ export default function AIChatPage() {
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <Badge className={`${puterReady ? "bg-green-500/20 text-green-400 border-green-500/30" : "bg-yellow-500/20 text-yellow-400"}`}>
-                <Sparkles className="h-3 w-3 mr-1" />
-                {puterReady ? "Ready" : "Loading..."}
+              <Badge className="bg-green-500/20 text-green-400 border-green-500/30">
+                <Zap className="h-3 w-3 mr-1" />
+                Super Z AI
               </Badge>
               {messages.length > 0 && (
                 <Button variant="ghost" size="sm" onClick={clearChat}>
@@ -189,7 +149,6 @@ export default function AIChatPage() {
                     variant="outline"
                     className="justify-start text-left h-auto py-3 px-4 border-primary/20 hover:border-primary"
                     onClick={() => sendMessage(s.text)}
-                    disabled={!puterReady}
                   >
                     <s.icon className={`h-4 w-4 mr-2 shrink-0 ${s.color}`} />
                     <span className="text-xs">{s.text}</span>
@@ -258,11 +217,11 @@ export default function AIChatPage() {
               onKeyDown={handleKeyDown}
               placeholder="اكتب سؤالك هنا... (مثال: حلل الذهب XAUUSD)"
               className="min-h-[50px] max-h-[150px] resize-none bg-muted/50 border-primary/20 focus:border-primary"
-              disabled={isLoading || !puterReady}
+              disabled={isLoading}
             />
             <Button
               onClick={() => sendMessage()}
-              disabled={!input.trim() || isLoading || !puterReady}
+              disabled={!input.trim() || isLoading}
               className="bg-gradient-to-r from-blue-600 via-purple-600 to-green-600 hover:opacity-90 shrink-0"
               size="icon"
             >
@@ -274,7 +233,7 @@ export default function AIChatPage() {
             </Button>
           </div>
           <p className="text-xs text-muted-foreground mt-2 text-center">
-            ⚡ Powered by Puter AI (Free) | ⚠️ التحليل لأغراض تعليمية فقط
+            ⚡ Powered by Super Z AI | ⚠️ التحليل لأغراض تعليمية فقط
           </p>
         </div>
       </div>

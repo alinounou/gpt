@@ -5,29 +5,7 @@ interface ChatRequest {
   message: string;
 }
 
-// Extract trading symbols from message
-function extractSymbols(message: string): string[] {
-  const patterns = [
-    /\b(XAUUSD|XAGUSD|GOLD|SILVER|OIL|WTI)\b/gi,
-    /\b(BTC|ETH|SOL|XRP|BNB|ADA|DOGE|DOT|AVAX)\b/gi,
-    /\b(EUR\/USD|GBP\/USD|USD\/JPY|AUD\/USD)\b/gi,
-    /\b(EURUSD|GBPUSD|USDJPY|AUDUSD)\b/gi,
-    /\b(NAS100|US30|US500|DAX|NASDAQ)\b/gi,
-    /\b(AAPL|TSLA|GOOGL|MSFT|AMZN|META|NVDA)\b/gi,
-  ];
-  
-  const symbols: string[] = [];
-  patterns.forEach(p => {
-    const matches = message.match(p);
-    if (matches) symbols.push(...matches);
-  });
-  
-  return [...new Set(symbols.map(s => s.toUpperCase().replace("/", "")))];
-}
-
-// Chat with AI using z-ai-web-dev-sdk
-async function chatWithAI(message: string): Promise<string> {
-  const systemPrompt = `أنت خبير تداول محترف مع 20 سنة خبرة في الأسواق المالية (Forex, Crypto, Stocks, Gold, Oil).
+const SYSTEM_PROMPT = `أنت خبير تداول محترف مع 20 سنة خبرة في الأسواق المالية (Forex, Crypto, Stocks, Gold, Oil, Indices).
 
 مهمتك: مساعدة المتداولين بالإجابة على أسئلتهم بشكل واضح ومفصل.
 
@@ -45,30 +23,10 @@ async function chatWithAI(message: string): Promise<string> {
 4. استخدم الإيموجي للتنسيق
 5. أضف تحذير المخاطر عند الاقتضاء
 
-مثال على الرد الممتاز:
-📌 التحليل: ...
-📊 المستويات: دعم xxx - مقاومة xxx
-🎯 السيناريو: إذا كسر xxx فإن ...
-⚠️ إدارة المخاطر: ...`;
-
-  try {
-    const zai = await ZAI.create();
-    
-    const completion = await zai.chat.completions.create({
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: message },
-      ],
-      temperature: 0.7,
-      max_tokens: 2000,
-    });
-
-    return completion.choices?.[0]?.message?.content || "عذراً، لم أتمكن من الرد.";
-  } catch (error) {
-    console.error("ZAI Error:", error);
-    throw error;
-  }
-}
+أمثلة على الردود الممتازة:
+- للتحليل: اذكر المستويات (دعم/مقاومة) بأرقام محددة
+- للاستراتيجيات: اشرح خطوات التنفيذ
+- للمخاطر: قدم نسب ونصائح محددة`;
 
 export async function POST(request: NextRequest) {
   try {
@@ -79,17 +37,35 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "اكتب سؤالك" }, { status: 400 });
     }
 
-    console.log("Chat message:", message);
+    console.log("📩 Received:", message);
 
-    // Get AI response
-    const response = await chatWithAI(message);
+    // Create ZAI instance
+    const zai = await ZAI.create();
+    
+    // Call AI
+    const completion = await zai.chat.completions.create({
+      messages: [
+        { role: "system", content: SYSTEM_PROMPT },
+        { role: "user", content: message },
+      ],
+      temperature: 0.7,
+      max_tokens: 2000,
+    });
+
+    const response = completion.choices?.[0]?.message?.content;
+
+    if (!response) {
+      throw new Error("No response from AI");
+    }
+
+    console.log("✅ Response:", response.substring(0, 100) + "...");
 
     return NextResponse.json({ response });
 
   } catch (error) {
-    console.error("Chat Error:", error);
+    console.error("❌ Chat Error:", error);
     return NextResponse.json(
-      { error: "حدث خطأ في الاتصال بالذكاء الاصطناعي. حاول مرة أخرى." },
+      { error: "حدث خطأ، حاول مرة أخرى" },
       { status: 500 }
     );
   }
@@ -98,7 +74,7 @@ export async function POST(request: NextRequest) {
 export async function GET() {
   return NextResponse.json({
     status: "ok",
-    message: "Infinity Algo Chat API",
-    provider: "Z-AI SDK (Built-in)",
+    message: "Infinity Algo AI Chat - Built-in ZAI SDK",
+    powered: "Super Z AI (Free & Unlimited)",
   });
 }
